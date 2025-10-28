@@ -129,9 +129,44 @@ class EncryptedTextManager:
         # 文件树标题
         ttk.Label(left_frame, text="文件夹", font=("Arial", 12, "bold")).pack(anchor=tk.W, pady=(0, 5))
         
+        # 添加搜索框
+        search_frame = ttk.Frame(left_frame)
+        search_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        self.search_var = tk.StringVar()
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        search_button = ttk.Button(search_frame, text="搜索", command=self.search)
+        search_button.pack(side=tk.RIGHT)
+        
+        # 搜索类型选择
+        search_type_frame = ttk.Frame(left_frame)
+        search_type_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        self.search_type = tk.StringVar(value="name")
+        ttk.Radiobutton(search_type_frame, text="文件名", variable=self.search_type, value="name").pack(side=tk.LEFT)
+        ttk.Radiobutton(search_type_frame, text="文件内容", variable=self.search_type, value="content").pack(side=tk.LEFT)
+        
+        # 创建搜索结果框架
+        self.search_result_frame = ttk.LabelFrame(left_frame, text="搜索结果")
+        
+        # 创建搜索结果列表
+        self.search_result = ttk.Treeview(self.search_result_frame, columns=("path",), show="tree")
+        self.search_result.heading("#0", text="名称")
+        self.search_result.heading("path", text="路径")
+        self.search_result.column("path", width=0, stretch=tk.NO)
+        self.search_result.pack(fill=tk.BOTH, expand=True)
+        
+        # 绑定双击事件
+        self.search_result.bind("<Double-1>", self.on_search_result_double_click)
+        
         # 创建树状视图
         self.tree = ttk.Treeview(left_frame)
         self.tree.pack(fill=tk.BOTH, expand=True)
+        
+        # 初始不显示搜索结果框架
+        self.search_result_frame.pack_forget()
         
         # 树状视图滚动条
         tree_scrollbar = ttk.Scrollbar(self.tree, orient="vertical", command=self.tree.yview)
@@ -868,6 +903,184 @@ class EncryptedTextManager:
             
         except Exception as e:
             messagebox.showerror("错误", f"重命名失败: {str(e)}")
+            
+    def search(self):
+        """搜索文件和文件夹"""
+        query = self.search_var.get().strip()
+        if not query:
+            messagebox.showinfo("提示", "请输入搜索内容")
+            return
+        
+        search_type = self.search_type.get()
+        
+        # 清空搜索结果
+        for item in self.search_result.get_children():
+            self.search_result.delete(item)
+        
+        # 隐藏文件树，显示搜索结果框架
+        self.tree.pack_forget()
+        self.search_result_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 设置状态栏
+        self.status_bar.config(text=f"正在搜索: {query}")
+        self.root.update()
+        
+        user_files_dir = os.path.join(self.files_dir, self.current_user)
+        
+        if search_type == "name":
+            # 搜索文件和文件夹名称
+            self._search_by_name(user_files_dir, query)
+        else:
+            # 搜索文件内容
+            self._search_by_content(user_files_dir, query)
+        
+        # 更新状态栏
+        result_count = len(self.search_result.get_children())
+        self.status_bar.config(text=f"搜索完成，找到 {result_count} 个结果")
+        
+        # 检查是否已经有返回按钮
+        has_back_button = False
+        for widget in self.search_result_frame.winfo_children():
+            if isinstance(widget, ttk.Button) and widget.cget("text") == "返回文件列表":
+                has_back_button = True
+                break
+        
+        # 只有在没有返回按钮时才添加
+        if not has_back_button:
+            back_button = ttk.Button(self.search_result_frame, text="返回文件列表", command=self._back_to_file_tree)
+            back_button.pack(side=tk.BOTTOM, pady=5)
+    
+    def _search_by_name(self, directory, query):
+        """按名称搜索文件和文件夹"""
+        query = query.lower()
+        
+        for root, dirs, files in os.walk(directory):
+            # 搜索文件夹
+            for dir_name in dirs:
+                if query in dir_name.lower():
+                    full_path = os.path.join(root, dir_name)
+                    rel_path = os.path.relpath(full_path, self.files_dir)
+                    self.search_result.insert("", "end", text=dir_name, values=(full_path,), image="")
+            
+            # 搜索文件
+            for file_name in files:
+                if query in file_name.lower():
+                    full_path = os.path.join(root, file_name)
+                    rel_path = os.path.relpath(full_path, self.files_dir)
+                    self.search_result.insert("", "end", text=file_name, values=(full_path,), image="")
+    
+    def _search_by_content(self, directory, query):
+        """按内容搜索文件"""
+        query = query.lower()
+        found_count = 0
+        
+        for root, dirs, files in os.walk(directory):
+            for file_name in files:
+                full_path = os.path.join(root, file_name)
+                
+                # 跳过非文本文件
+                if not self._is_text_file(file_name):
+                    continue
+                
+                try:
+                    # 读取文件内容
+                    with open(full_path, "r") as f:
+                        encrypted_content = f.read()
+                    
+                    if encrypted_content:
+                        try:
+                            # 使用应用程序自己的解密方法
+                            decrypted_content = self.decrypt_text(encrypted_content).lower()
+                            
+                            if query in decrypted_content:
+                                self.search_result.insert("", "end", text=file_name, values=(full_path,), image="")
+                                found_count += 1
+                        except Exception as e:
+                            # 忽略无法解密的文件
+                            pass
+                except Exception as e:
+                    # 忽略无法读取的文件
+                    pass
+        
+        # 更新状态栏
+        if found_count > 0:
+            self.status_bar.config(text=f"找到 {found_count} 个匹配结果")
+        else:
+            self.status_bar.config(text="找到0个结果")
+    
+    def _is_text_file(self, file_name):
+        """判断是否为文本文件"""
+        # 简单判断文件扩展名
+        text_extensions = ['.txt', '.md', '.py', '.java', '.c', '.cpp', '.h', '.html', '.css', '.js', '.json', '.xml']
+        _, ext = os.path.splitext(file_name.lower())
+        return ext in text_extensions or not ext
+    
+    def _back_to_file_tree(self):
+        """返回文件树视图"""
+        self.search_result_frame.pack_forget()
+        self.tree.pack(fill=tk.BOTH, expand=True)
+        self.status_bar.config(text="就绪")
+    
+    def on_search_result_double_click(self, event):
+        """处理搜索结果双击事件"""
+        selected = self.search_result.selection()
+        if not selected:
+            return
+        
+        item_id = selected[0]
+        item_path = self.search_result.item(item_id, "values")[0]
+        
+        if os.path.isfile(item_path):
+            # 打开文件
+            self.open_file(item_path)
+            # 返回文件树视图
+            self._back_to_file_tree()
+            
+            # 在文件树中选中该文件
+            self._select_file_in_tree(item_path)
+        else:
+            # 如果是文件夹，只在文件树中选中它
+            self._back_to_file_tree()
+            self._select_file_in_tree(item_path)
+    
+    def _select_file_in_tree(self, path):
+        """在文件树中选中指定路径的文件或文件夹"""
+        # 展开所有父文件夹
+        parent_dir = os.path.dirname(path)
+        self._expand_to_path(parent_dir)
+        
+        # 查找并选中项目（自定义递归遍历）
+        for item_id in self._iter_tree_items(""):
+            item_values = self.tree.item(item_id, "values")
+            if item_values and item_values[0] == path:
+                self.tree.selection_set(item_id)
+                self.tree.see(item_id)
+                break
+    
+    def _expand_to_path(self, path):
+        """展开到指定路径"""
+        user_files_dir = os.path.join(self.files_dir, self.current_user)
+        if path == user_files_dir or not os.path.exists(path):
+            return
+        
+        # 先展开父路径
+        parent = os.path.dirname(path)
+        self._expand_to_path(parent)
+        
+        # 然后展开当前路径（自定义递归遍历）
+        for item_id in self._iter_tree_items(""):
+            item_values = self.tree.item(item_id, "values")
+            if item_values and item_values[0] == path:
+                self.tree.item(item_id, open=True)
+                break
+
+    def _iter_tree_items(self, parent=""):
+        """递归遍历树，返回所有子项的迭代器"""
+        for item_id in self.tree.get_children(parent):
+            yield item_id
+            # 递归遍历该子项的所有后代
+            for child_id in self._iter_tree_items(item_id):
+                yield child_id
     
     def _reencrypt_files(self, directory, old_key, new_key):
         """使用新密钥重新加密目录中的所有文件"""
