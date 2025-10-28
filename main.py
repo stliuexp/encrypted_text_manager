@@ -91,6 +91,9 @@ class EncryptedTextManager:
         # 创建主界面
         self.root.title(f"加密文本管理器 - {self.current_user}")
         
+        # 解除回车键绑定
+        self.root.unbind("<Return>")
+        
         # 创建菜单栏
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
@@ -101,7 +104,11 @@ class EncryptedTextManager:
         file_menu.add_command(label="新建文件", command=self.new_file)
         file_menu.add_command(label="新建文件夹", command=self.new_folder)
         file_menu.add_separator()
+        file_menu.add_command(label="重命名", command=self.rename_item)
+        file_menu.add_separator()
         file_menu.add_command(label="保存", command=self.save_file)
+        file_menu.add_separator()
+        file_menu.add_command(label="删除文件", command=self.delete_file)
         file_menu.add_separator()
         file_menu.add_command(label="修改密码", command=self.change_password)
         file_menu.add_separator()
@@ -149,6 +156,15 @@ class EncryptedTextManager:
         
         # 绑定树状视图选择事件
         self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+        
+        # 绑定拖放事件
+        self.tree.bind("<ButtonPress-1>", self.on_tree_press)
+        self.tree.bind("<B1-Motion>", self.on_tree_motion)
+        self.tree.bind("<ButtonRelease-1>", self.on_tree_release)
+        
+        # 拖放变量
+        self.drag_source = None
+        self.drag_data = None
         
         # 加载文件树
         self.load_file_tree()
@@ -266,6 +282,9 @@ class EncryptedTextManager:
         # 用户文件根目录
         user_files_dir = os.path.join(self.files_dir, self.current_user)
         
+        # 设置树的显示列
+        self.tree["show"] = "tree"
+        
         # 添加根节点
         root_node = self.tree.insert("", "end", text=self.current_user, open=True, values=(user_files_dir, "dir"))
         
@@ -337,7 +356,10 @@ class EncryptedTextManager:
             
             # 更新文本编辑器
             self.text_editor.delete(1.0, tk.END)
-            self.text_editor.insert(tk.END, decrypted_content)
+            if decrypted_content:
+                # 移除末尾可能的多余换行符
+                decrypted_content = decrypted_content.rstrip('\n')
+                self.text_editor.insert(1.0, decrypted_content)
             
             # 更新状态栏
             self.status_bar.config(text=f"已打开: {file_path}")
@@ -477,6 +499,99 @@ class EncryptedTextManager:
         except Exception as e:
             messagebox.showerror("错误", f"创建文件夹失败: {str(e)}")
     
+    def delete_file(self):
+        """删除文件，需要密码验证"""
+        # 获取选中的文件
+        selected_item = self.tree.selection()
+        if not selected_item:
+            messagebox.showinfo("提示", "请先选择要删除的文件或文件夹")
+            return
+        
+        item_id = selected_item[0]
+        item_values = self.tree.item(item_id, "values")
+        
+        if not item_values:
+            return
+        
+        item_path = item_values[0]
+        item_type = item_values[1]
+        
+        # 创建密码验证对话框
+        verify_window = tk.Toplevel(self.root)
+        verify_window.title("密码验证")
+        verify_window.geometry("300x150")
+        verify_window.resizable(False, False)
+        verify_window.transient(self.root)
+        verify_window.grab_set()
+        
+        # 创建表单
+        frame = ttk.Frame(verify_window, padding="20")
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 密码
+        ttk.Label(frame, text="请输入密码确认删除:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        password_var = tk.StringVar()
+        password_entry = ttk.Entry(frame, textvariable=password_var, show="*", width=20)
+        password_entry.grid(row=0, column=1, pady=5)
+        password_entry.focus()
+        
+        # 确认按钮
+        def verify_and_delete():
+            password = password_var.get()
+            if not password:
+                messagebox.showerror("错误", "密码不能为空")
+                return
+            
+            # 验证密码
+            user_file = os.path.join(self.users_dir, f"{self.current_user}.json")
+            
+            try:
+                with open(user_file, "r") as f:
+                    user_data = json.load(f)
+                
+                salt = base64.b64decode(user_data["salt"])
+                stored_hash = user_data["password_hash"]
+                
+                # 计算密码哈希
+                password_hash = hashlib.sha256((password + base64.b64encode(salt).decode()).encode()).hexdigest()
+                
+                if password_hash != stored_hash:
+                    messagebox.showerror("错误", "密码错误")
+                    return
+                
+                # 密码正确，执行删除
+                verify_window.destroy()
+                
+                # 如果当前打开的文件是要删除的文件，先关闭它
+                if self.current_file and (self.current_file == item_path or self.current_file.startswith(item_path + os.sep)):
+                    self.current_file = None
+                    self.file_title.config(text="未选择文件")
+                    self.text_editor.delete(1.0, tk.END)
+                
+                # 删除文件或目录
+                try:
+                    if item_type == "file":
+                        os.remove(item_path)
+                        messagebox.showinfo("成功", "文件已删除")
+                    else:
+                        import shutil
+                        shutil.rmtree(item_path)
+                        messagebox.showinfo("成功", "文件夹及其内容已删除")
+                    
+                    # 刷新文件树
+                    self.load_file_tree()
+                    
+                except Exception as e:
+                    messagebox.showerror("错误", f"删除失败: {str(e)}")
+                
+            except Exception as e:
+                messagebox.showerror("错误", f"验证失败: {str(e)}")
+        
+        ttk.Button(frame, text="确认删除", command=verify_and_delete).grid(row=1, column=0, columnspan=2, pady=10)
+        
+        # 取消按钮
+        ttk.Button(frame, text="取消", command=verify_window.destroy).grid(row=2, column=0, columnspan=2)
+    
     def change_password(self):
         """修改密码"""
         # 创建修改密码对话框
@@ -606,6 +721,153 @@ class EncryptedTextManager:
             
         except Exception as e:
             messagebox.showerror("错误", f"修改密码失败: {str(e)}", parent=window)
+    
+    def on_tree_press(self, event):
+        """处理树状视图鼠标按下事件，开始拖放操作"""
+        # 获取点击的项目
+        item = self.tree.identify_row(event.y)
+        if not item:
+            return
+            
+        # 保存拖放源和数据
+        self.drag_source = item
+        item_values = self.tree.item(item, "values")
+        if item_values:
+            self.drag_data = item_values
+    
+    def on_tree_motion(self, event):
+        """处理树状视图鼠标移动事件，显示拖放效果"""
+        if not self.drag_source:
+            return
+            
+        # 可以在这里添加视觉反馈，如修改鼠标样式等
+        pass
+    
+    def on_tree_release(self, event):
+        """处理树状视图鼠标释放事件，完成拖放操作"""
+        if not self.drag_source or not self.drag_data:
+            return
+            
+        # 获取释放的目标
+        target = self.tree.identify_row(event.y)
+        if not target or target == self.drag_source:
+            # 如果没有目标或目标是自己，取消拖放
+            self.drag_source = None
+            self.drag_data = None
+            return
+            
+        # 获取目标信息
+        target_values = self.tree.item(target, "values")
+        if not target_values or target_values[1] != "dir":
+            # 目标必须是文件夹
+            messagebox.showinfo("提示", "只能拖放到文件夹中")
+            self.drag_source = None
+            self.drag_data = None
+            return
+            
+        # 获取源和目标路径
+        source_path = self.drag_data[0]
+        source_type = self.drag_data[1]
+        target_path = target_values[0]
+        
+        # 确保不是将文件夹拖到自己的子文件夹中
+        if source_type == "dir" and target_path.startswith(source_path):
+            messagebox.showinfo("提示", "不能将文件夹移动到其子文件夹中")
+            self.drag_source = None
+            self.drag_data = None
+            return
+            
+        # 构建新路径
+        source_name = os.path.basename(source_path)
+        new_path = os.path.join(target_path, source_name)
+        
+        # 检查目标路径是否已存在同名文件/文件夹
+        if os.path.exists(new_path):
+            messagebox.showinfo("提示", f"目标文件夹中已存在名为 {source_name} 的文件或文件夹")
+            self.drag_source = None
+            self.drag_data = None
+            return
+            
+        try:
+            # 移动文件或文件夹
+            import shutil
+            shutil.move(source_path, target_path)
+            
+            # 如果当前打开的文件被移动，更新当前文件路径
+            if self.current_file and (self.current_file == source_path or 
+                                     (source_type == "dir" and self.current_file.startswith(source_path))):
+                if source_type == "file":
+                    self.current_file = new_path
+                else:
+                    # 如果是文件夹，更新路径前缀
+                    self.current_file = self.current_file.replace(source_path, new_path, 1)
+            
+            # 刷新文件树
+            self.load_file_tree()
+            
+            # 如果是文件且当前打开，重新打开
+            if source_type == "file" and self.current_file == new_path:
+                self.open_file(new_path)
+                
+        except Exception as e:
+            messagebox.showerror("错误", f"移动失败: {str(e)}")
+            
+        # 重置拖放变量
+        self.drag_source = None
+        self.drag_data = None
+    
+    def rename_item(self):
+        """重命名文件或文件夹"""
+        # 获取选中的项目
+        selected_item = self.tree.selection()
+        if not selected_item:
+            messagebox.showinfo("提示", "请先选择要重命名的文件或文件夹")
+            return
+            
+        item_id = selected_item[0]
+        item_values = self.tree.item(item_id, "values")
+        
+        if not item_values:
+            return
+            
+        item_path = item_values[0]
+        item_type = item_values[1]
+        old_name = os.path.basename(item_path)
+        
+        # 获取新名称
+        new_name = simpledialog.askstring("重命名", "请输入新名称:", initialvalue=old_name)
+        if not new_name or new_name == old_name:
+            return
+            
+        # 构建新路径
+        parent_dir = os.path.dirname(item_path)
+        new_path = os.path.join(parent_dir, new_name)
+        
+        # 检查新路径是否已存在
+        if os.path.exists(new_path):
+            messagebox.showinfo("提示", f"已存在名为 {new_name} 的文件或文件夹")
+            return
+            
+        try:
+            # 重命名文件或文件夹
+            os.rename(item_path, new_path)
+            
+            # 如果当前打开的文件被重命名，更新当前文件路径
+            if self.current_file and (self.current_file == item_path or 
+                                     (item_type == "dir" and self.current_file.startswith(item_path))):
+                if item_type == "file":
+                    self.current_file = new_path
+                    # 更新文件标题
+                    self.file_title.config(text=new_name)
+                else:
+                    # 如果是文件夹，更新路径前缀
+                    self.current_file = self.current_file.replace(item_path, new_path, 1)
+            
+            # 刷新文件树
+            self.load_file_tree()
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"重命名失败: {str(e)}")
     
     def _reencrypt_files(self, directory, old_key, new_key):
         """使用新密钥重新加密目录中的所有文件"""
