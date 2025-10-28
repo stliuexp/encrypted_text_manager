@@ -10,11 +10,16 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from tkinter.scrolledtext import ScrolledText
 import tkinter.filedialog as filedialog
+ 
+# 产品信息常量
+PRODUCT_NAME = "Daliverse 加密文本管理器"
+PRODUCT_VERSION = "V0.05"
+PRODUCT_DISPLAY = f"{PRODUCT_NAME} {PRODUCT_VERSION}"
 
 class EncryptedTextManager:
     def __init__(self, root):
         self.root = root
-        self.root.title("加密文本管理器")
+        self.root.title(PRODUCT_DISPLAY)
         self.root.geometry("1000x600")
         self.root.minsize(800, 500)
         
@@ -45,7 +50,7 @@ class EncryptedTextManager:
         login_frame.pack(expand=True)
         
         # 标题
-        ttk.Label(login_frame, text="加密文本管理器", font=("Arial", 16, "bold")).grid(row=0, column=0, columnspan=2, pady=20)
+        ttk.Label(login_frame, text=PRODUCT_DISPLAY, font=("Arial", 16, "bold")).grid(row=0, column=0, columnspan=2, pady=20)
         
         # 用户名
         ttk.Label(login_frame, text="用户名:").grid(row=1, column=0, sticky=tk.W, pady=5)
@@ -89,7 +94,7 @@ class EncryptedTextManager:
             widget.destroy()
         
         # 创建主界面
-        self.root.title(f"加密文本管理器 - {self.current_user}")
+        self.root.title(f"{PRODUCT_DISPLAY} - {self.current_user}")
         
         # 解除回车键绑定
         self.root.unbind("<Return>")
@@ -113,6 +118,11 @@ class EncryptedTextManager:
         file_menu.add_command(label="修改密码", command=self.change_password)
         file_menu.add_separator()
         file_menu.add_command(label="退出", command=self.logout)
+        
+        # 帮助菜单
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="帮助", menu=help_menu)
+        help_menu.add_command(label="关于", command=self.show_about)
         
         # 创建主框架
         main_frame = ttk.Frame(self.root)
@@ -144,7 +154,7 @@ class EncryptedTextManager:
         search_type_frame = ttk.Frame(left_frame)
         search_type_frame.pack(fill=tk.X, pady=(0, 5))
         
-        self.search_type = tk.StringVar(value="name")
+        self.search_type = tk.StringVar(value="content")
         ttk.Radiobutton(search_type_frame, text="文件名", variable=self.search_type, value="name").pack(side=tk.LEFT)
         ttk.Radiobutton(search_type_frame, text="文件内容", variable=self.search_type, value="content").pack(side=tk.LEFT)
         
@@ -206,13 +216,13 @@ class EncryptedTextManager:
     
     def login(self, username, password):
         if not username or not password:
-            messagebox.showerror("错误", "用户名和密码不能为空")
+            messagebox.showerror("错误", "用户名和密码不能为空", parent=self.root)
             return
         
         user_file = os.path.join(self.users_dir, f"{username}.json")
         
         if not os.path.exists(user_file):
-            messagebox.showerror("错误", "用户不存在")
+            messagebox.showerror("错误", "用户不存在", parent=self.root)
             return
         
         try:
@@ -227,7 +237,7 @@ class EncryptedTextManager:
             password_hash = hashlib.sha256((password + base64.b64encode(salt).decode()).encode()).hexdigest()
             
             if password_hash != stored_hash:
-                messagebox.showerror("错误", "密码错误")
+                messagebox.showerror("错误", "密码错误", parent=self.root)
                 return
             
             # 生成加密密钥
@@ -243,17 +253,17 @@ class EncryptedTextManager:
             self.show_main_screen()
             
         except Exception as e:
-            messagebox.showerror("错误", f"登录失败: {str(e)}")
+            messagebox.showerror("错误", f"登录失败: {str(e)}", parent=self.root)
     
     def register(self, username, password):
         if not username or not password:
-            messagebox.showerror("错误", "用户名和密码不能为空")
+            messagebox.showerror("错误", "用户名和密码不能为空", parent=self.root)
             return
         
         user_file = os.path.join(self.users_dir, f"{username}.json")
         
         if os.path.exists(user_file):
-            messagebox.showerror("错误", "用户已存在")
+            messagebox.showerror("错误", "用户已存在", parent=self.root)
             return
         
         try:
@@ -278,10 +288,10 @@ class EncryptedTextManager:
             if not os.path.exists(user_files_dir):
                 os.makedirs(user_files_dir)
             
-            messagebox.showinfo("成功", "注册成功，请登录")
+            messagebox.showinfo("成功", "注册成功，请登录", parent=self.root)
             
         except Exception as e:
-            messagebox.showerror("错误", f"注册失败: {str(e)}")
+            messagebox.showerror("错误", f"注册失败: {str(e)}", parent=self.root)
     
     def generate_key(self, password, salt):
         """从密码生成加密密钥"""
@@ -384,7 +394,7 @@ class EncryptedTextManager:
                 try:
                     decrypted_content = self.decrypt_text(encrypted_content)
                 except:
-                    messagebox.showerror("错误", "无法解密文件，可能密钥不正确")
+                    messagebox.showerror("错误", "无法解密文件，可能密钥不正确", parent=self.root)
                     decrypted_content = ""
             else:
                 decrypted_content = ""
@@ -400,7 +410,7 @@ class EncryptedTextManager:
             self.status_bar.config(text=f"已打开: {file_path}")
             
         except Exception as e:
-            messagebox.showerror("错误", f"打开文件失败: {str(e)}")
+            messagebox.showerror("错误", f"打开文件失败: {str(e)}", parent=self.root)
     
     def save_file(self):
         """保存当前文件"""
@@ -423,7 +433,7 @@ class EncryptedTextManager:
             
             return True
         except Exception as e:
-            messagebox.showerror("错误", f"保存文件失败: {str(e)}")
+            messagebox.showerror("错误", f"保存文件失败: {str(e)}", parent=self.root)
             return False
     
     def save_file_as(self):
@@ -474,7 +484,7 @@ class EncryptedTextManager:
             parent_dir = user_files_dir
         
         # 获取文件名
-        file_name = simpledialog.askstring("新建文件", "请输入文件名:")
+        file_name = simpledialog.askstring("新建文件", "请输入文件名:", parent=self.root)
         if not file_name:
             return
         
@@ -497,7 +507,7 @@ class EncryptedTextManager:
             self.open_file(file_path)
             
         except Exception as e:
-            messagebox.showerror("错误", f"创建文件失败: {str(e)}")
+            messagebox.showerror("错误", f"创建文件失败: {str(e)}", parent=self.root)
     
     def new_folder(self):
         """创建新文件夹"""
@@ -517,7 +527,7 @@ class EncryptedTextManager:
             parent_dir = user_files_dir
         
         # 获取文件夹名
-        folder_name = simpledialog.askstring("新建文件夹", "请输入文件夹名:")
+        folder_name = simpledialog.askstring("新建文件夹", "请输入文件夹名:", parent=self.root)
         if not folder_name:
             return
         
@@ -532,14 +542,14 @@ class EncryptedTextManager:
             self.load_file_tree()
             
         except Exception as e:
-            messagebox.showerror("错误", f"创建文件夹失败: {str(e)}")
+            messagebox.showerror("错误", f"创建文件夹失败: {str(e)}", parent=self.root)
     
     def delete_file(self):
         """删除文件，需要密码验证"""
         # 获取选中的文件
         selected_item = self.tree.selection()
         if not selected_item:
-            messagebox.showinfo("提示", "请先选择要删除的文件或文件夹")
+            messagebox.showinfo("提示", "请先选择要删除的文件或文件夹", parent=self.root)
             return
         
         item_id = selected_item[0]
@@ -558,6 +568,7 @@ class EncryptedTextManager:
         verify_window.resizable(False, False)
         verify_window.transient(self.root)
         verify_window.grab_set()
+        self.center_window(verify_window)
         
         # 创建表单
         frame = ttk.Frame(verify_window, padding="20")
@@ -574,7 +585,7 @@ class EncryptedTextManager:
         def verify_and_delete():
             password = password_var.get()
             if not password:
-                messagebox.showerror("错误", "密码不能为空")
+                messagebox.showerror("错误", "密码不能为空", parent=self.root)
                 return
             
             # 验证密码
@@ -591,7 +602,7 @@ class EncryptedTextManager:
                 password_hash = hashlib.sha256((password + base64.b64encode(salt).decode()).encode()).hexdigest()
                 
                 if password_hash != stored_hash:
-                    messagebox.showerror("错误", "密码错误")
+                    messagebox.showerror("错误", "密码错误", parent=self.root)
                     return
                 
                 # 密码正确，执行删除
@@ -607,20 +618,20 @@ class EncryptedTextManager:
                 try:
                     if item_type == "file":
                         os.remove(item_path)
-                        messagebox.showinfo("成功", "文件已删除")
+                        messagebox.showinfo("成功", "文件已删除", parent=self.root)
                     else:
                         import shutil
                         shutil.rmtree(item_path)
-                        messagebox.showinfo("成功", "文件夹及其内容已删除")
+                        messagebox.showinfo("成功", "文件夹及其内容已删除", parent=self.root)
                     
                     # 刷新文件树
                     self.load_file_tree()
                     
                 except Exception as e:
-                    messagebox.showerror("错误", f"删除失败: {str(e)}")
+                    messagebox.showerror("错误", f"删除失败: {str(e)}", parent=self.root)
                 
             except Exception as e:
-                messagebox.showerror("错误", f"验证失败: {str(e)}")
+                messagebox.showerror("错误", f"验证失败: {str(e)}", parent=self.root)
         
         ttk.Button(frame, text="确认删除", command=verify_and_delete).grid(row=1, column=0, columnspan=2, pady=10)
         
@@ -636,6 +647,7 @@ class EncryptedTextManager:
         change_pwd_window.resizable(False, False)
         change_pwd_window.transient(self.root)
         change_pwd_window.grab_set()
+        self.center_window(change_pwd_window)
         
         # 创建表单
         frame = ttk.Frame(change_pwd_window, padding="20")
@@ -696,15 +708,15 @@ class EncryptedTextManager:
     def _process_password_change(self, current_pwd, new_pwd, confirm_pwd, window):
         """处理密码修改逻辑"""
         if not current_pwd or not new_pwd or not confirm_pwd:
-            messagebox.showerror("错误", "所有密码字段都不能为空", parent=window)
+            messagebox.showerror("错误", "所有密码字段都不能为空", parent=self.root)
             return
         
         if new_pwd != confirm_pwd:
-            messagebox.showerror("错误", "新密码与确认密码不匹配", parent=window)
+            messagebox.showerror("错误", "新密码与确认密码不匹配", parent=self.root)
             return
         
         if current_pwd == new_pwd:
-            messagebox.showerror("错误", "新密码不能与当前密码相同", parent=window)
+            messagebox.showerror("错误", "新密码不能与当前密码相同", parent=self.root)
             return
         
         # 验证当前密码
@@ -722,7 +734,7 @@ class EncryptedTextManager:
             password_hash = hashlib.sha256((current_pwd + base64.b64encode(salt).decode()).encode()).hexdigest()
             
             if password_hash != stored_hash:
-                messagebox.showerror("错误", "当前密码错误", parent=window)
+                messagebox.showerror("错误", "当前密码错误", parent=self.root)
                 return
             
             # 计算新密码哈希
@@ -752,10 +764,10 @@ class EncryptedTextManager:
             window.destroy()
             
             # 显示成功消息
-            messagebox.showinfo("成功", "密码已成功修改，所有文件已重新加密")
+            messagebox.showinfo("成功", "密码已成功修改，所有文件已重新加密", parent=self.root)
             
         except Exception as e:
-            messagebox.showerror("错误", f"修改密码失败: {str(e)}", parent=window)
+            messagebox.showerror("错误", f"修改密码失败: {str(e)}", parent=self.root)
     
     def on_tree_press(self, event):
         """处理树状视图鼠标按下事件，开始拖放操作"""
@@ -795,7 +807,7 @@ class EncryptedTextManager:
         target_values = self.tree.item(target, "values")
         if not target_values or target_values[1] != "dir":
             # 目标必须是文件夹
-            messagebox.showinfo("提示", "只能拖放到文件夹中")
+            messagebox.showinfo("提示", "只能拖放到文件夹中", parent=self.root)
             self.drag_source = None
             self.drag_data = None
             return
@@ -807,7 +819,7 @@ class EncryptedTextManager:
         
         # 确保不是将文件夹拖到自己的子文件夹中
         if source_type == "dir" and target_path.startswith(source_path):
-            messagebox.showinfo("提示", "不能将文件夹移动到其子文件夹中")
+            messagebox.showinfo("提示", "不能将文件夹移动到其子文件夹中", parent=self.root)
             self.drag_source = None
             self.drag_data = None
             return
@@ -818,7 +830,7 @@ class EncryptedTextManager:
         
         # 检查目标路径是否已存在同名文件/文件夹
         if os.path.exists(new_path):
-            messagebox.showinfo("提示", f"目标文件夹中已存在名为 {source_name} 的文件或文件夹")
+            messagebox.showinfo("提示", f"目标文件夹中已存在名为 {source_name} 的文件或文件夹", parent=self.root)
             self.drag_source = None
             self.drag_data = None
             return
@@ -845,7 +857,7 @@ class EncryptedTextManager:
                 self.open_file(new_path)
                 
         except Exception as e:
-            messagebox.showerror("错误", f"移动失败: {str(e)}")
+            messagebox.showerror("错误", f"移动失败: {str(e)}", parent=self.root)
             
         # 重置拖放变量
         self.drag_source = None
@@ -856,7 +868,7 @@ class EncryptedTextManager:
         # 获取选中的项目
         selected_item = self.tree.selection()
         if not selected_item:
-            messagebox.showinfo("提示", "请先选择要重命名的文件或文件夹")
+            messagebox.showinfo("提示", "请先选择要重命名的文件或文件夹", parent=self.root)
             return
             
         item_id = selected_item[0]
@@ -870,7 +882,7 @@ class EncryptedTextManager:
         old_name = os.path.basename(item_path)
         
         # 获取新名称
-        new_name = simpledialog.askstring("重命名", "请输入新名称:", initialvalue=old_name)
+        new_name = simpledialog.askstring("重命名", "请输入新名称:", initialvalue=old_name, parent=self.root)
         if not new_name or new_name == old_name:
             return
             
@@ -880,7 +892,7 @@ class EncryptedTextManager:
         
         # 检查新路径是否已存在
         if os.path.exists(new_path):
-            messagebox.showinfo("提示", f"已存在名为 {new_name} 的文件或文件夹")
+            messagebox.showinfo("提示", f"已存在名为 {new_name} 的文件或文件夹", parent=self.root)
             return
             
         try:
@@ -902,13 +914,13 @@ class EncryptedTextManager:
             self.load_file_tree()
             
         except Exception as e:
-            messagebox.showerror("错误", f"重命名失败: {str(e)}")
+            messagebox.showerror("错误", f"重命名失败: {str(e)}", parent=self.root)
             
     def search(self):
         """搜索文件和文件夹"""
         query = self.search_var.get().strip()
         if not query:
-            messagebox.showinfo("提示", "请输入搜索内容")
+            messagebox.showinfo("提示", "请输入搜索内容", parent=self.root)
             return
         
         search_type = self.search_type.get()
@@ -1007,6 +1019,38 @@ class EncryptedTextManager:
             self.status_bar.config(text=f"找到 {found_count} 个匹配结果")
         else:
             self.status_bar.config(text="找到0个结果")
+
+    def center_window(self, window):
+        """将弹窗居中到主窗体"""
+        try:
+            window.update_idletasks()
+            rx = self.root.winfo_x()
+            ry = self.root.winfo_y()
+            rw = self.root.winfo_width()
+            rh = self.root.winfo_height()
+            w = window.winfo_width()
+            h = window.winfo_height()
+            if w <= 1 or h <= 1:
+                geom = window.geometry()
+                if "x" in geom:
+                    parts = geom.split("+")[0].split("x")
+                    if len(parts) == 2:
+                        w = int(parts[0])
+                        h = int(parts[1])
+            x = rx + (rw - w) // 2
+            y = ry + (rh - h) // 2
+            window.geometry(f"+{x}+{y}")
+        except Exception:
+            # 失败时退回让系统居中
+            try:
+                window.eval('tk::PlaceWindow . center')
+            except Exception:
+                pass
+
+    def show_about(self):
+        """显示关于界面"""
+        message = f"{PRODUCT_DISPLAY}\n\nCopyright Daliverse."
+        messagebox.showinfo("关于", message, parent=self.root)
     
     def _is_text_file(self, file_name):
         """判断是否为文本文件"""
