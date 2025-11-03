@@ -203,6 +203,30 @@ class EncryptedTextManager:
         self.text_editor = ScrolledText(right_frame, wrap=tk.WORD, undo=True)
         self.text_editor.pack(fill=tk.BOTH, expand=True)
         
+        # 添加剪贴板快捷键支持
+        self.text_editor.bind("<Control-c>", self.copy_text)
+        self.text_editor.bind("<Control-v>", self.paste_text)
+        self.text_editor.bind("<Control-x>", self.cut_text)
+        
+        # 添加右键菜单
+        self.text_editor.bind("<Button-3>", self.show_context_menu)
+        
+        # 添加工具栏
+        toolbar_frame = ttk.Frame(right_frame)
+        toolbar_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        # 复制按钮
+        copy_button = ttk.Button(toolbar_frame, text="复制", command=self.copy_text)
+        copy_button.pack(side=tk.LEFT, padx=2)
+        
+        # 粘贴按钮
+        paste_button = ttk.Button(toolbar_frame, text="粘贴", command=self.paste_text)
+        paste_button.pack(side=tk.LEFT, padx=2)
+        
+        # 剪切按钮
+        cut_button = ttk.Button(toolbar_frame, text="剪切", command=self.cut_text)
+        cut_button.pack(side=tk.LEFT, padx=2)
+        
         # 状态栏
         self.status_bar = ttk.Label(self.root, text="就绪", relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
@@ -1055,6 +1079,54 @@ class EncryptedTextManager:
             except Exception:
                 pass
 
+    def copy_text(self, event=None):
+        """复制选中的文本到剪贴板"""
+        try:
+            self.text_editor.clipboard_clear()
+            text = self.text_editor.get("sel.first", "sel.last")
+            self.text_editor.clipboard_append(text)
+            self.status_bar.config(text="已复制文本到剪贴板")
+            return "break"  # 阻止默认行为
+        except tk.TclError:
+            # 没有选中文本
+            self.status_bar.config(text="未选中文本")
+    
+    def paste_text(self, event=None):
+        """从剪贴板粘贴文本"""
+        try:
+            text = self.text_editor.clipboard_get()
+            if self.text_editor.tag_ranges("sel"):
+                self.text_editor.delete("sel.first", "sel.last")
+            self.text_editor.insert("insert", text)
+            self.status_bar.config(text="已粘贴文本")
+            return "break"  # 阻止默认行为
+        except Exception as e:
+            self.status_bar.config(text=f"粘贴失败: {str(e)}")
+    
+    def cut_text(self, event=None):
+        """剪切选中的文本到剪贴板"""
+        try:
+            self.copy_text()
+            self.text_editor.delete("sel.first", "sel.last")
+            self.status_bar.config(text="已剪切文本到剪贴板")
+            return "break"  # 阻止默认行为
+        except tk.TclError:
+            # 没有选中文本
+            self.status_bar.config(text="未选中文本")
+    
+    def show_context_menu(self, event):
+        """显示右键菜单"""
+        context_menu = tk.Menu(self.root, tearoff=0)
+        context_menu.add_command(label="复制", command=self.copy_text)
+        context_menu.add_command(label="粘贴", command=self.paste_text)
+        context_menu.add_command(label="剪切", command=self.cut_text)
+        
+        # 在鼠标位置显示菜单
+        try:
+            context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            context_menu.grab_release()
+    
     def show_about(self):
         """显示关于界面"""
         message = f"{PRODUCT_DISPLAY}\n\nCopyright Daliverse."
