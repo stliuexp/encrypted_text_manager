@@ -28,7 +28,15 @@ class EncryptedTextManager:
         self.current_file = None
         
         # 设置应用程序数据目录
-        self.app_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        # 判断是否为打包后的exe
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的exe，使用exe所在目录
+            base_path = os.path.dirname(sys.executable)
+        else:
+            # 如果是开发环境，使用脚本所在目录
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            
+        self.app_dir = os.path.join(base_path, "data")
         self.users_dir = os.path.join(self.app_dir, "users")
         self.files_dir = os.path.join(self.app_dir, "files")
         
